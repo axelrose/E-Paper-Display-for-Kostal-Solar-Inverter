@@ -1,8 +1,8 @@
 #include <WiFi.h>
-//Display includes
+// Display includes
 #include <GxEPD.h>
 #include <GxGDEY027T91/GxGDEY027T91.h>    // 2.7" b/w
-#include GxEPD_BitmapExamples
+// #include GxEPD_BitmapExamples
 #include <Fonts/FreeMonoBold9pt7b.h>
 #include <Fonts/FreeMonoBold12pt7b.h>
 #include <Fonts/FreeMonoBold18pt7b.h>
@@ -10,15 +10,20 @@
 #include <GxIO/GxIO_SPI/GxIO_SPI.h>
 #include <GxIO/GxIO.h>
 
-//define ESP Pinout
+// read secrets from mounted file "secrets.json"
+#include <ArduinoJson.h>
+#include <SPIFFS.h> // Include the SPIFFS library for ESP8266 or ESP32
+
+// define ESP Pinout
 GxIO_Class io(SPI, /*CS=5*/ 26, /*DC=*/ 25, /*RST=*/ 33); // arbitrary selection of 17, 16
 GxEPD_Class display(io, /*RST=*/ 33, /*BUSY=*/ 27); // arbitrary selection of (16), 4
 
-const char* ssid = "xx";
-const char* password = "yy";
+const char* secrets = "secrets.json";
 
-const char* host = "xx";
-uint16_t hostPort = yy;
+// Modbus tcp connection to your inverter
+const char* host; // something like 192.172.100.1, read from secrets file
+uint16_t hostPort; // typically port 1502, read from secrets file
+
 uint32_t altzeit;
 uint8_t bufferRead[50];
 WiFiClient client;
@@ -26,9 +31,40 @@ bool tcpConnectionErrorFlag = false;
 bool wifiConnectionErrorFlag = false;
 
 void setup() {
-  // put your setup code here, to run once:
+  // initiating sequence
   Serial.begin(115200);
-  WiFi.begin(ssid, password);
+
+  // mount file system
+  if (!SPIFFS.begin()) {
+    Serial.println("Failed to mount SPIFFS");
+    return;
+  }
+
+  // read secrets file
+  File file = SPIFFS.open(strcat("/", secrets), "r");
+  if (!file) {
+    Serial.println(strcat("Failed to open file: ", secrets));
+    return;
+  }
+
+  // parse secrets JSON data
+  DynamicJsonDocument doc(1024); // Adjust the size as needed
+  DeserializationError error = deserializeJson(doc, file);
+
+  if (error) {
+    Serial.println(strcat("Failed to parse file: ",secrets));
+    return;
+  }
+
+  // connect to WiFi
+  const char* wifi_ssid = doc["wifi.ssid"];
+  const char* wifi_password = doc["wifi.password"];
+  WiFi.begin(wifi_ssid, wifi_password);
+
+  // read connection data of inverter from secrets file too
+  host = doc["inverter.host"];
+  hostPort = doc["inverter.port"];
+
 
   Serial.println("Display setup");
   display.init(115200);
@@ -74,7 +110,7 @@ void loop() {
     WiFi.disconnect();
     WiFi.reconnect();
   }
-  else{
+  else {
     wifiConnectionErrorFlag = false;
     if (millis() - altzeit >= 60000) {
       altzeit=millis();
@@ -83,7 +119,7 @@ void loop() {
       drawHomeConsumption();
       drawBatterySOC();
       drawMonthlyYieldInEUR();
-      if(tcpConnectionErrorFlag){
+      if (tcpConnectionErrorFlag) {
         drawError("TCP Error!");
       }
       display.update();
@@ -92,7 +128,7 @@ void loop() {
   }
 }
 
-void drawError(char* error){
+void drawError(char* error) {
   display.setFont(&FreeMonoBold9pt7b);
   display.setTextColor(GxEPD_BLACK);
   int16_t tbx, tby; uint16_t tbw, tbh;
@@ -149,8 +185,7 @@ void drawBatterySOC()
   //Serial.println("drawHelloWorld done");
 }
 
-void drawMonthlyYieldInEUR()
-{
+void drawMonthlyYieldInEUR() {
   display.fillRect(2, 121, 200, 36, GxEPD_WHITE);
   display.setCursor(4, 140);
   display.setFont(&FreeMonoBold9pt7b);
@@ -192,7 +227,8 @@ int TCP_send(uint8_t* message) {
   client.stop();
   return 0;
 }
-float readFloat(uint8_t addrHIGH, uint8_t addrLOW){
+
+float readFloat(uint8_t addrHIGH, uint8_t addrLOW) {
   uint8_t message[] = {0x00, 0x01, 0x00, 0x00, 0x00, 0x06, 0x47, 0x03, addrHIGH , addrLOW, 0x00, 0x02};
   int error = TCP_send(message);
   if(error == -1){
@@ -206,7 +242,7 @@ float readFloat(uint8_t addrHIGH, uint8_t addrLOW){
   return 0.0;
 }
 
-uint16_t readUint16(uint8_t addrHIGH, uint8_t addrLOW){
+uint16_t readUint16(uint8_t addrHIGH, uint8_t addrLOW) {
   uint8_t message[] = {0x00, 0x01, 0x00, 0x00, 0x00, 0x06, 0x47, 0x03, addrHIGH , addrLOW, 0x00, 0x01};
   int error = TCP_send(message);
   if(error == -1){
@@ -219,8 +255,8 @@ uint16_t readUint16(uint8_t addrHIGH, uint8_t addrLOW){
   }
   return 0;
 }
-float bytesToFloat(byte b0, byte b1, byte b2, byte b3)
-{
+
+float bytesToFloat(byte b0, byte b1, byte b2, byte b3) {
   float f;
   byte b[] = {b3, b2, b1, b0};
   memcpy(&f, &b, 4);

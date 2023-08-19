@@ -12,7 +12,7 @@ Create a file named "secrets.json" at the root level of your project. Use the va
   "wifi.ssid": "YOUR-WIFI-NAME",
   "wifi.password": "YOUR-WIFI-PASSWORD",
   "inverter.host": "192.168.178.100",
-  "inverter.ort": 1502
+  "inverter.port": 1502
 }
 ```
 

@@ -1,8 +1,9 @@
 #include <WiFi.h>
 // Display includes
 #include <GxEPD.h>
-#include <GxGDEY027T91/GxGDEY027T91.h>    // 2.7" b/w
+#include <GxGDEY027T91/GxGDEY027T91.h>  // 2.7" b/w
 // #include GxEPD_BitmapExamples
+// still needed?
 #include <Fonts/FreeMonoBold9pt7b.h>
 #include <Fonts/FreeMonoBold12pt7b.h>
 #include <Fonts/FreeMonoBold18pt7b.h>
@@ -12,23 +13,25 @@
 
 // read secrets from mounted file "secrets.json"
 #include <ArduinoJson.h>
-#include <SPIFFS.h> // Include the SPIFFS library for ESP8266 or ESP32
+#include <SPIFFS.h>  // Include the SPIFFS library for ESP8266 or ESP32
 
 // define ESP Pinout
-GxIO_Class io(SPI, /*CS=5*/ 26, /*DC=*/ 25, /*RST=*/ 33); // arbitrary selection of 17, 16
-GxEPD_Class display(io, /*RST=*/ 33, /*BUSY=*/ 27); // arbitrary selection of (16), 4
+GxIO_Class io(SPI, /*CS=5*/ 26, /*DC=*/25, /*RST=*/33);  // arbitrary selection of 17, 16
+GxEPD_Class display(io, /*RST=*/33, /*BUSY=*/27);        // arbitrary selection of (16), 4
 
 const char* secrets = "secrets.json";
 
 // Modbus tcp connection to your inverter
-const char* host; // something like 192.172.100.1, read from secrets file
-uint16_t hostPort; // typically port 1502, read from secrets file
+const char* host;   // something like 192.172.100.1, read from secrets file
+uint16_t hostPort;  // typically port 1502, read from secrets file
 
 uint32_t altzeit;
 uint8_t bufferRead[50];
 WiFiClient client;
 bool tcpConnectionErrorFlag = false;
 bool wifiConnectionErrorFlag = false;
+
+float CENT_PER_KW = 0.08;
 
 void setup() {
   // initiating sequence
@@ -48,11 +51,11 @@ void setup() {
   }
 
   // parse secrets JSON data
-  DynamicJsonDocument doc(1024); // Adjust the size as needed
+  DynamicJsonDocument doc(1024);  // Adjust the size as needed
   DeserializationError error = deserializeJson(doc, file);
 
   if (error) {
-    Serial.println(strcat("Failed to parse file: ",secrets));
+    Serial.println(strcat("Failed to parse file: ", secrets));
     return;
   }
 
@@ -73,7 +76,7 @@ void setup() {
   Serial.println("Display setup done");
 
   while (WiFi.status() != WL_CONNECTED) {
-    if(!wifiConnectionErrorFlag){
+    if (!wifiConnectionErrorFlag) {
       drawError("Keine Verbindung!");
       display.update();
       display.powerDown();
@@ -84,13 +87,13 @@ void setup() {
   }
   wifiConnectionErrorFlag = false;
   Serial.println("Wifi connected");
-  
+
   drawBackground();
   drawStromerzeugung();
   drawHomeConsumption();
   drawBatterySOC();
   drawMonthlyYieldInEUR();
-  if(tcpConnectionErrorFlag){
+  if (tcpConnectionErrorFlag) {
     drawError("TCP Error!");
   }
   display.update();
@@ -99,8 +102,8 @@ void setup() {
 
 void loop() {
   // put your main code here, to run repeatedly:
-  if (WiFi.status() != WL_CONNECTED){
-    if(!wifiConnectionErrorFlag){
+  if (WiFi.status() != WL_CONNECTED) {
+    if (!wifiConnectionErrorFlag) {
       drawError("Keine Verbindung!");
       display.update();
       display.powerDown();
@@ -109,11 +112,10 @@ void loop() {
     delay(1000);
     WiFi.disconnect();
     WiFi.reconnect();
-  }
-  else {
+  } else {
     wifiConnectionErrorFlag = false;
     if (millis() - altzeit >= 60000) {
-      altzeit=millis();
+      altzeit = millis();
       drawBackground();
       drawStromerzeugung();
       drawHomeConsumption();
@@ -131,7 +133,8 @@ void loop() {
 void drawError(char* error) {
   display.setFont(&FreeMonoBold9pt7b);
   display.setTextColor(GxEPD_BLACK);
-  int16_t tbx, tby; uint16_t tbw, tbh;
+  int16_t tbx, tby;
+  uint16_t tbw, tbh;
   display.getTextBounds(error, 0, 0, &tbx, &tby, &tbw, &tbh);
   // center bounding box by transposition of origin:
   uint16_t x = ((display.width() - tbw) / 2) - tbx;
@@ -141,8 +144,7 @@ void drawError(char* error) {
   display.print(error);
 }
 
-void drawStromerzeugung()
-{
+void drawStromerzeugung() {
   display.fillRect(2, 2, 200, 36, GxEPD_WHITE);
   display.setCursor(4, 14);
   display.setFont(&FreeMonoBold9pt7b);
@@ -152,11 +154,9 @@ void drawStromerzeugung()
   float stromerzeugung = readFloat(0x4, 0x2A) / 1000;
   display.print(stromerzeugung);
   display.print(" kW");
-  //Serial.println("drawHelloWorld done");
 }
 
-void drawHomeConsumption()
-{
+void drawHomeConsumption() {
   display.fillRect(2, 37, 200, 36, GxEPD_WHITE);
   display.setCursor(4, 56);
   display.setFont(&FreeMonoBold9pt7b);
@@ -172,8 +172,7 @@ void drawHomeConsumption()
   //Serial.println("drawHelloWorld done");
 }
 
-void drawBatterySOC()
-{
+void drawBatterySOC() {
   display.fillRect(2, 79, 200, 36, GxEPD_WHITE);
   display.setCursor(4, 98);
   display.setFont(&FreeMonoBold9pt7b);
@@ -182,7 +181,6 @@ void drawBatterySOC()
   display.setCursor(4, 120);
   display.print(readUint16(0x2, 0x2));
   display.print("%");
-  //Serial.println("drawHelloWorld done");
 }
 
 void drawMonthlyYieldInEUR() {
@@ -192,13 +190,12 @@ void drawMonthlyYieldInEUR() {
   display.print("Umsatz");
   display.setFont(&FreeMonoBold12pt7b);
   display.setCursor(4, 162);
-  float umsatz = readFloat(0x1, 0x46) * 0.18 / 1000;
+  float umsatz = readFloat(0x1, 0x46) * CENT_PER_KW / 1000;
   display.print(umsatz);
   display.print(" EUR");
-  //Serial.println("drawHelloWorld done");
 }
 
-void drawBackground(){
+void drawBackground() {
   display.fillScreen(GxEPD_WHITE);
   display.fillRect(0, 0, 264, 176, GxEPD_BLACK);
   display.fillRect(2, 2, 260, 172, GxEPD_WHITE);
@@ -215,12 +212,11 @@ int TCP_send(uint8_t* message) {
   tcpConnectionErrorFlag = false;
   Serial.println("sending data to server");
   client.write(message, 12);
-  while(!client.available() && client.connected()){
-
+  while (!client.available() && client.connected()) {
   }
-  if(client.available()){
+  if (client.available()) {
     bufferRead[0] = client.available();
-    for(int i = 1; i <= bufferRead[0]; i++){
+    for (int i = 1; i <= bufferRead[0]; i++) {
       bufferRead[i] = client.read();
     }
   }
@@ -229,12 +225,11 @@ int TCP_send(uint8_t* message) {
 }
 
 float readFloat(uint8_t addrHIGH, uint8_t addrLOW) {
-  uint8_t message[] = {0x00, 0x01, 0x00, 0x00, 0x00, 0x06, 0x47, 0x03, addrHIGH , addrLOW, 0x00, 0x02};
+  uint8_t message[] = { 0x00, 0x01, 0x00, 0x00, 0x00, 0x06, 0x47, 0x03, addrHIGH, addrLOW, 0x00, 0x02 };
   int error = TCP_send(message);
-  if(error == -1){
+  if (error == -1) {
 
-  }
-  else{
+  } else {
     float f = bytesToFloat(bufferRead[10], bufferRead[11], bufferRead[12], bufferRead[13]);
     Serial.println(f);
     return f;
@@ -243,12 +238,11 @@ float readFloat(uint8_t addrHIGH, uint8_t addrLOW) {
 }
 
 uint16_t readUint16(uint8_t addrHIGH, uint8_t addrLOW) {
-  uint8_t message[] = {0x00, 0x01, 0x00, 0x00, 0x00, 0x06, 0x47, 0x03, addrHIGH , addrLOW, 0x00, 0x01};
+  uint8_t message[] = { 0x00, 0x01, 0x00, 0x00, 0x00, 0x06, 0x47, 0x03, addrHIGH, addrLOW, 0x00, 0x01 };
   int error = TCP_send(message);
-  if(error == -1){
+  if (error == -1) {
 
-  }
-  else{
+  } else {
     uint16_t ui = (bufferRead[10] << 8) + bufferRead[11];
     Serial.println(ui);
     return ui;
@@ -258,7 +252,7 @@ uint16_t readUint16(uint8_t addrHIGH, uint8_t addrLOW) {
 
 float bytesToFloat(byte b0, byte b1, byte b2, byte b3) {
   float f;
-  byte b[] = {b3, b2, b1, b0};
+  byte b[] = { b3, b2, b1, b0 };
   memcpy(&f, &b, 4);
   return f;
 }

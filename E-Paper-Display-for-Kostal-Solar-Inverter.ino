@@ -8,10 +8,9 @@
 
 #include <WiFi.h>
 
-// Display includes
+// Display
 #include <GxEPD.h>
 #include <GxGDEY027T91/GxGDEY027T91.h>  // 2.7" b/w
-// #include GxEPD_BitmapExamples
 #include <Fonts/FreeMonoBold9pt7b.h>
 #include <Fonts/FreeMonoBold12pt7b.h>
 #include <Fonts/FreeMonoBold18pt7b.h>
@@ -19,19 +18,13 @@
 #include <GxIO/GxIO_SPI/GxIO_SPI.h>
 #include <GxIO/GxIO.h>
 
-// read secrets from mounted file "secrets.json"
-#include <ArduinoJson.h>
-#include <SPIFFS.h>  // Include the SPIFFS library for ESP8266 or ESP32
+// get the secret values at compile time from git ignored file
+// defines wifi_ssid, wifi_password, inverter_host, inverter_port
+#include "secrets.h"
 
 // define ESP Pinout
 GxIO_Class io(SPI, /*CS=5*/ 26, /*DC=*/25, /*RST=*/33);  // arbitrary selection of 17, 16
 GxEPD_Class display(io, /*RST=*/33, /*BUSY=*/27);        // arbitrary selection of (16), 4
-
-const char* secrets = "secrets.json";
-
-// Modbus tcp connection to your inverter
-const char* host;   // something like 192.172.100.1, read from secrets file
-uint16_t hostPort;  // typically port 1502, read from secrets file
 
 uint32_t altzeit;
 uint8_t bufferRead[50];
@@ -45,42 +38,14 @@ int SERIAL_SPEED = 921600;
 void setup() {
   // must match upload speed
   Serial.begin(SERIAL_SPEED);
-  // dance around the message buffer, wondering if this could be made easier with "cout"
+
+  Serial.println("------------------- setup -------------------");
   char message[50];
   snprintf(message, sizeof(message), "Serial speed set to: %d", SERIAL_SPEED);
   Serial.println(message);
 
-  // mount file system
-  if (!SPIFFS.begin()) {
-    Serial.println("Failed to mount SPIFFS");
-    return;
-  }
-
-  // read secrets file
-  File file = SPIFFS.open(strcat("/", secrets), "r");
-  if (!file) {
-    Serial.println(strcat("Failed to open file: ", secrets));
-    return;
-  }
-
-  // parse secrets JSON data
-  DynamicJsonDocument doc(1024);  // Adjust the size as needed
-  DeserializationError error = deserializeJson(doc, file);
-
-  if (error) {
-    Serial.println(strcat("Failed to parse file: ", secrets));
-    return;
-  }
-
   // connect to WiFi
-  const char* wifi_ssid = doc["wifi.ssid"];
-  const char* wifi_password = doc["wifi.password"];
   WiFi.begin(wifi_ssid, wifi_password);
-
-  // read connection data of inverter from secrets file too
-  host = doc["inverter.host"];
-  hostPort = doc["inverter.port"];
-
 
   Serial.println("Display setup");
   display.init(115200);
@@ -189,7 +154,7 @@ void drawBatterySOC() {
   display.fillRect(2, 79, 200, 36, GxEPD_WHITE);
   display.setCursor(4, 98);
   display.setFont(&FreeMonoBold9pt7b);
-  display.print("XXXBatterie");
+  display.print("Batterie");
   display.setFont(&FreeMonoBold12pt7b);
   display.setCursor(4, 120);
   display.print(readUint16(0x2, 0x2));
@@ -215,8 +180,8 @@ void drawBackground() {
 }
 
 int TCP_send(uint8_t* message) {
-  Serial.printf("connecting to %s %d \n", host, hostPort);
-  if (!client.connect(host, hostPort, 1000)) {
+  Serial.printf("connecting to %s %d \n", inverter_host, inverter_port);
+  if (!client.connect(inverter_host, inverter_port, 1000)) {
     Serial.println("connection failed");
     delay(5000);
     tcpConnectionErrorFlag = true;

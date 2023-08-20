@@ -1,2 +1,5 @@
-/secrets.json
+/secrets.h
 .DS_Store
+/libraries
+/tool
+

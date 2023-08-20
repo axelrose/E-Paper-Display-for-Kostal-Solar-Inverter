@@ -1,9 +1,17 @@
+/* 
+ * E-Paper Display for Kostal Solar Inverter
+ *
+ * MIT license
+ *
+ * Authors: Tim Linsel, Axel Rose
+ */
+
 #include <WiFi.h>
+
 // Display includes
 #include <GxEPD.h>
 #include <GxGDEY027T91/GxGDEY027T91.h>  // 2.7" b/w
 // #include GxEPD_BitmapExamples
-// still needed?
 #include <Fonts/FreeMonoBold9pt7b.h>
 #include <Fonts/FreeMonoBold12pt7b.h>
 #include <Fonts/FreeMonoBold18pt7b.h>
@@ -32,10 +40,15 @@ bool tcpConnectionErrorFlag = false;
 bool wifiConnectionErrorFlag = false;
 
 float CENT_PER_KW = 0.08;
+int SERIAL_SPEED = 921600;
 
 void setup() {
-  // initiating sequence
-  Serial.begin(115200);
+  // must match upload speed
+  Serial.begin(SERIAL_SPEED);
+  // dance around the message buffer, wondering if this could be made easier with "cout"
+  char message[50];
+  snprintf(message, sizeof(message), "Serial speed set to: %d", SERIAL_SPEED);
+  Serial.println(message);
 
   // mount file system
   if (!SPIFFS.begin()) {
@@ -176,7 +189,7 @@ void drawBatterySOC() {
   display.fillRect(2, 79, 200, 36, GxEPD_WHITE);
   display.setCursor(4, 98);
   display.setFont(&FreeMonoBold9pt7b);
-  display.print("Batteriefuellstand");
+  display.print("XXXBatterie");
   display.setFont(&FreeMonoBold12pt7b);
   display.setCursor(4, 120);
   display.print(readUint16(0x2, 0x2));
